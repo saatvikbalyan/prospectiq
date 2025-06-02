@@ -10,11 +10,15 @@ export interface CustomParameter {
 }
 
 export interface ICP {
-  id: string
+  id: string // Application-generated ID
   name: string
   description: string
-  dateModified: string
-  color?: "blue" | "green" | "purple" | "orange" | "pink" | "default"
   customParameters: CustomParameter[]
-  assistantId?: string // New field for OpenAI Assistant ID
+  dateModified?: string // Will be handled by DB, but good for client-side
+  color?: "blue" | "green" | "purple" | "orange" | "pink" | "default"
+  assistantId?: string | null // OpenAI Assistant ID
+  systemPrompt?: string | null // Generated system prompt
+  userId?: string // To associate with a user
+  createdAt?: string // Will be handled by DB
+  updatedAt?: string // Will be handled by DB
 }

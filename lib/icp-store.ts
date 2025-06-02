@@ -1,122 +1,26 @@
 import type { ICP } from "@/types/icp"
-import { createOpenAIAssistant, updateOpenAIAssistant, deleteOpenAIAssistant } from "./openai-assistant-manager"
-import { toast } from "@/hooks/use-toast" // Assuming useToast is compatible
 
 // This would typically be replaced with a proper state management solution
 // or API calls in a real application
-const icpsStore: ICP[] = []
+let icpsStore: ICP[] = []
 
 export const getICPs = (): ICP[] => {
   return [...icpsStore]
 }
 
-export const addICP = async (icpData: Omit<ICP, "id" | "dateModified" | "assistantId">): Promise<ICP | null> => {
-  const newIcpId = Date.now().toString()
-  const assistantId = await createOpenAIAssistant(icpData, newIcpId)
+export const addICP = (icp: ICP): void => {
+  icpsStore.push(icp)
+}
 
-  if (assistantId) {
-    const newIcp: ICP = {
-      ...icpData,
-      id: newIcpId,
-      dateModified: new Date().toISOString().split("T")[0],
-      assistantId: assistantId,
-    }
-    icpsStore.push(newIcp)
-    toast({ title: "ICP Created", description: `ICP "${newIcp.name}" and its AI assistant created successfully.` })
-    return newIcp
-  } else {
-    toast({
-      title: "ICP Creation Partially Failed",
-      description: `ICP "${icpData.name}" was created locally. AI assistant creation failed. Please check the browser console for specific error messages from OpenAI. You can try updating the ICP to re-attempt assistant creation.`,
-      variant: "destructive",
-      duration: 10000,
-    })
-    // Fallback: add ICP without assistant ID if assistant creation fails
-    const newIcpWithoutAssistant: ICP = {
-      ...icpData,
-      id: newIcpId,
-      dateModified: new Date().toISOString().split("T")[0],
-    }
-    icpsStore.push(newIcpWithoutAssistant)
-    return newIcpWithoutAssistant
+export const updateICP = (updatedIcp: ICP): void => {
+  const index = icpsStore.findIndex((icp) => icp.id === updatedIcp.id)
+  if (index !== -1) {
+    icpsStore[index] = updatedIcp
   }
 }
 
-export const updateICP = async (updatedIcpData: ICP): Promise<ICP | null> => {
-  const index = icpsStore.findIndex((icp) => icp.id === updatedIcpData.id)
-  if (index === -1) {
-    toast({ title: "Error", description: "ICP not found for update.", variant: "destructive" })
-    return null
-  }
-
-  let currentAssistantId = icpsStore[index].assistantId
-  let assistantUpdatedOrCreated = false
-
-  if (currentAssistantId) {
-    assistantUpdatedOrCreated = await updateOpenAIAssistant(currentAssistantId, updatedIcpData, updatedIcpData.id)
-    if (assistantUpdatedOrCreated) {
-      toast({ title: "AI Assistant Updated", description: `AI assistant for "${updatedIcpData.name}" updated.` })
-    } else {
-      toast({
-        title: "AI Assistant Update Failed",
-        description: `Could not update AI assistant for "${updatedIcpData.name}". The ICP data is saved locally.`,
-        variant: "destructive",
-      })
-    }
-  } else {
-    // Attempt to create assistant if it doesn't exist
-    const newAssistantId = await createOpenAIAssistant(updatedIcpData, updatedIcpData.id)
-    if (newAssistantId) {
-      currentAssistantId = newAssistantId
-      updatedIcpData.assistantId = newAssistantId // Ensure the updated data has the new ID
-      assistantUpdatedOrCreated = true
-      toast({ title: "AI Assistant Created", description: `AI assistant for "${updatedIcpData.name}" created.` })
-    } else {
-      toast({
-        title: "AI Assistant Creation Failed",
-        description: `Could not create AI assistant for "${updatedIcpData.name}" during update. The ICP data is saved locally.`,
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Ensure local store is updated with the potentially new/updated assistantId
-  const finalIcpData = {
-    ...updatedIcpData,
-    assistantId: currentAssistantId,
-    dateModified: new Date().toISOString().split("T")[0],
-  }
-  icpsStore[index] = finalIcpData
-  toast({ title: "ICP Updated", description: `ICP "${finalIcpData.name}" updated locally.` })
-  return finalIcpData
-}
-
-export const deleteICP = async (id: string): Promise<boolean> => {
-  const index = icpsStore.findIndex((icp) => icp.id === id)
-  if (index === -1) {
-    toast({ title: "Error", description: "ICP not found for deletion.", variant: "destructive" })
-    return false
-  }
-
-  const icpToDelete = icpsStore[index]
-  let assistantDeleted = true // Assume success if no assistant ID
-
-  if (icpToDelete.assistantId) {
-    assistantDeleted = await deleteOpenAIAssistant(icpToDelete.assistantId)
-    if (assistantDeleted) {
-      toast({ title: "AI Assistant Deleted", description: `AI assistant for "${icpToDelete.name}" deleted.` })
-    } else {
-      toast({
-        title: "AI Assistant Deletion Failed",
-        description: `Could not delete AI assistant for "${icpToDelete.name}". The ICP will be removed locally.`,
-        variant: "destructive",
-      })
-    }
-  }
-
-  icpsStore.splice(index, 1)
-  toast({ title: "ICP Deleted", description: `ICP "${icpToDelete.name}" deleted locally.` })
-  return true // Local deletion is always successful if found
+export const deleteICP = (id: string): void => {
+  icpsStore = icpsStore.filter((icp) => icp.id !== id)
 }
 
 export const getICPById = (id: string): ICP | undefined => {
