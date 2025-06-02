@@ -16,4 +16,5 @@ export interface ICP {
   dateModified: string
   color?: "blue" | "green" | "purple" | "orange" | "pink" | "default"
   customParameters: CustomParameter[]
+  assistantId?: string // New field for OpenAI Assistant ID
 }

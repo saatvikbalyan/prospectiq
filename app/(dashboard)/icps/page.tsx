@@ -40,25 +40,29 @@ export default function ICPsPage() {
     setIsModalOpen(true)
   }
 
-  const handleDeleteICP = (id: string) => {
-    deleteICP(id)
-    setIcps(getICPs())
+  const handleDeleteICP = async (id: string) => {
+    await deleteICP(id) // Await the delete
+    setIcps(getICPs()) // Refresh list from store
     setDeletingId(null)
   }
 
-  const handleSaveICP = (savedIcp: ICP) => {
+  const handleSaveICP = async (savedIcp: ICP) => {
     if (editingICP) {
-      updateICP(savedIcp)
+      await updateICP(savedIcp) // Await the update
     } else {
-      const newIcp = {
-        ...savedIcp,
-        id: Date.now().toString(),
-        dateModified: new Date().toISOString().split("T")[0],
+      // Prepare data for addICP, omitting fields set by the function
+      const newIcpData = {
+        name: savedIcp.name,
+        description: savedIcp.description,
+        customParameters: savedIcp.customParameters,
+        color: savedIcp.color,
+        // id, dateModified, assistantId will be set by addICP
       }
-      addICP(newIcp)
+      await addICP(newIcpData as Omit<ICP, "id" | "dateModified" | "assistantId">) // Await the add
     }
-    setIcps(getICPs())
+    setIcps(getICPs()) // Refresh list from store
     setIsModalOpen(false)
+    setEditingICP(null) // Clear editing state
   }
 
   return (
