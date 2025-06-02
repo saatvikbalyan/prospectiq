@@ -4,58 +4,7 @@ import { toast } from "@/hooks/use-toast" // Assuming useToast is compatible
 
 // This would typically be replaced with a proper state management solution
 // or API calls in a real application
-const icpsStore: ICP[] = [
-  {
-    id: "1",
-    name: "Enterprise Tech Companies",
-    description: "Large technology companies with 500+ employees, focusing on cloud infrastructure and AI solutions.",
-    dateModified: "2024-05-15",
-    color: "blue",
-    customParameters: [
-      {
-        id: "cp1",
-        parameterName: "Cloud Adoption Level",
-        parameterDescription: "Maturity of cloud usage (e.g., Low, Medium, High).",
-        scoringType: "Score Range",
-        scoringMin: 1,
-        scoringMax: 5,
-      },
-      {
-        id: "cp2",
-        parameterName: "AI Integration Projects",
-        parameterDescription: "Number of active AI projects.",
-        scoringType: "Number",
-      },
-    ],
-    assistantId: "asst_existing_placeholder_1", // Placeholder
-  },
-  {
-    id: "2",
-    name: "Mid-Market SaaS",
-    description: "SaaS companies with $10M-$100M revenue, typically Series B or C funded.",
-    dateModified: "2024-05-14",
-    color: "green",
-    customParameters: [
-      {
-        id: "cp3",
-        parameterName: "Annual Recurring Revenue (ARR)",
-        parameterDescription: "Current ARR in millions.",
-        scoringType: "Score Range",
-        scoringMin: 10,
-        scoringMax: 100,
-      },
-      {
-        id: "cp4",
-        parameterName: "Integration Ecosystem",
-        parameterDescription: "Number of key integrations offered.",
-        scoringType: "Score Range",
-        scoringMin: 1,
-        scoringMax: 20,
-      },
-    ],
-    assistantId: "asst_existing_placeholder_2", // Placeholder
-  },
-]
+const icpsStore: ICP[] = []
 
 export const getICPs = (): ICP[] => {
   return [...icpsStore]
@@ -78,8 +27,9 @@ export const addICP = async (icpData: Omit<ICP, "id" | "dateModified" | "assista
   } else {
     toast({
       title: "ICP Creation Partially Failed",
-      description: `ICP "${icpData.name}" was created locally, but its AI assistant could not be created. Please try updating the ICP to create the assistant.`,
+      description: `ICP "${icpData.name}" was created locally. AI assistant creation failed. Please check the browser console for specific error messages from OpenAI. You can try updating the ICP to re-attempt assistant creation.`,
       variant: "destructive",
+      duration: 10000,
     })
     // Fallback: add ICP without assistant ID if assistant creation fails
     const newIcpWithoutAssistant: ICP = {
