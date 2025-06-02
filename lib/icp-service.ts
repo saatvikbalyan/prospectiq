@@ -1,8 +1,7 @@
 import { getSupabaseBrowserClient } from "./supabase-client"
 import type { ICP } from "@/types/icp"
 import { generateICPSystemPrompt } from "./prompt-generator"
-import { createOpenAIAssistant, updateOpenAIAssistant, deleteOpenAIAssistant } from "./openai-assistant-manager"
-import { toast } from "@/hooks/use-toast" // Assuming you have a toast hook
+import { toast } from "@/hooks/use-toast"
 
 const supabase = getSupabaseBrowserClient()
 
@@ -10,11 +9,10 @@ export async function getICPsFromSupabase(): Promise<ICP[]> {
   const { data, error } = await supabase.from("icps").select("*").order("created_at", { ascending: false })
 
   if (error) {
-    console.error("Error fetching ICPs:", error)
-    toast({ title: "Error", description: "Could not fetch ICPs. " + error.message, variant: "destructive" })
+    console.error("Error fetching ICPs from Supabase:", error)
+    toast({ title: "Database Error", description: "Could not fetch ICPs. " + error.message, variant: "destructive" })
     return []
   }
-  // Map Supabase row to ICP type
   return data.map(mapRowToICP) || []
 }
 
@@ -22,10 +20,18 @@ export async function getICPByIdFromSupabase(id: string): Promise<ICP | null> {
   const { data, error } = await supabase.from("icps").select("*").eq("id", id).single()
 
   if (error) {
-    console.error(`Error fetching ICP with id ${id}:`, error)
+    if (error.code === "PGRST116") {
+      console.info(`ICP with id ${id} not found or not accessible (PGRST116). Details:`, JSON.stringify(error, null, 2))
+    } else {
+      console.error(`Supabase error fetching ICP with id ${id}:`, JSON.stringify(error, null, 2))
+    }
+
     if (error.code !== "PGRST116") {
-      // PGRST116: "Searched for a single row, but found no rows" - this is fine for a "not found" case
-      toast({ title: "Error", description: `Could not fetch ICP. ${error.message}`, variant: "destructive" })
+      toast({
+        title: "Database Error",
+        description: `Could not fetch ICP (ID: ${id}). ${error.message}`,
+        variant: "destructive",
+      })
     }
     return null
   }
@@ -33,52 +39,46 @@ export async function getICPByIdFromSupabase(id: string): Promise<ICP | null> {
 }
 
 export async function addICPToSupabase(
-  icpData: Omit<ICP, "id" | "assistantId" | "systemPrompt" | "createdAt" | "updatedAt" | "dateModified">,
+  icpData: Omit<ICP, "id" | "assistantId" | "systemPrompt" | "createdAt" | "updatedAt" | "dateModified" | "userId">,
+  userId: string, // Added userId as a parameter
 ): Promise<ICP | null> {
-  const newId = `icp_${Date.now().toString()}` // Simple unique ID generation
+  const newId = `icp_${Date.now().toString()}`
 
   const systemPrompt = generateICPSystemPrompt({
     ...icpData,
     id: newId,
     customParameters: icpData.customParameters || [],
+    userId: userId, // Include userId for prompt generation if needed
   })
 
-  let assistantId: string | null = null
-  if (process.env.NEXT_PUBLIC_ENABLE_OPENAI_ASSISTANTS === "true") {
-    // Control assistant creation via env var
-    assistantId = await createOpenAIAssistant(icpData.name, systemPrompt)
-    if (!assistantId) {
-      toast({
-        title: "OpenAI Error",
-        description: "Failed to create OpenAI assistant. ICP saved without assistant.",
-        variant: "warning",
-      })
-      // Proceed to save ICP without assistantId if creation fails
-    }
-  } else {
-    console.log("OpenAI Assistant creation is disabled via environment variable.")
+  console.log("OpenAI Assistant creation is bypassed. Storing ICP data directly.")
+
+  if (!userId) {
+    // This check is now more of a safeguard, as userId is passed in.
+    console.error("User ID not provided to addICPToSupabase. Cannot add ICP.")
+    toast({
+      title: "Authentication Error",
+      description: "User ID is missing. Cannot create an ICP.",
+      variant: "destructive",
+    })
+    return null
   }
 
   const icpToInsert = {
     ...icpData,
     id: newId,
-    custom_parameters: icpData.customParameters as any, // Supabase expects JSON
+    custom_parameters: icpData.customParameters as any,
     system_prompt: systemPrompt,
-    assistant_id: assistantId,
-    // user_id will be set by RLS policy default or explicitly if needed
+    assistant_id: null,
+    user_id: userId,
   }
 
-  // @ts-ignore - Supabase types might not perfectly align with our ICP type for insert
+  // @ts-ignore
   const { data, error } = await supabase.from("icps").insert(icpToInsert).select().single()
 
   if (error) {
-    console.error("Error adding ICP:", error)
+    console.error("Error adding ICP to Supabase:", JSON.stringify(error, null, 2))
     toast({ title: "Database Error", description: "Could not add ICP. " + error.message, variant: "destructive" })
-    // If assistant was created but DB save failed, consider deleting the orphaned assistant
-    if (assistantId) {
-      console.warn(`Orphaned OpenAI assistant ${assistantId} may have been created. Attempting to delete.`)
-      await deleteOpenAIAssistant(assistantId)
-    }
     return null
   }
 
@@ -91,50 +91,36 @@ export async function updateICPInSupabase(
   icpUpdates: Partial<Omit<ICP, "id" | "createdAt" | "updatedAt">>,
 ): Promise<ICP | null> {
   const currentICP = await getICPByIdFromSupabase(icpId)
+
   if (!currentICP) {
-    toast({ title: "Error", description: "ICP not found for update.", variant: "destructive" })
+    toast({
+      title: "Update Failed",
+      description: `ICP with ID ${icpId} not found or inaccessible. Cannot update.`,
+      variant: "destructive",
+    })
     return null
   }
 
   let systemPrompt = currentICP.systemPrompt
-  let assistantId = currentICP.assistantId
 
-  // Check if name or customParameters changed, requiring prompt/assistant update
-  const needsPromptUpdate = icpUpdates.name || icpUpdates.customParameters
+  const needsPromptUpdate = icpUpdates.name || icpUpdates.description || icpUpdates.customParameters
 
   if (needsPromptUpdate) {
-    const updatedFullICP: ICP = {
-      ...currentICP,
-      ...icpUpdates,
-      // Ensure customParameters is an array for prompt generation
+    const updatedFullICPDataForPrompt: ICP = {
+      id: icpId,
+      name: icpUpdates.name || currentICP.name,
+      description: icpUpdates.description || currentICP.description,
       customParameters: icpUpdates.customParameters || currentICP.customParameters || [],
+      color: icpUpdates.color || currentICP.color,
+      assistantId: currentICP.assistantId,
+      systemPrompt: currentICP.systemPrompt,
+      userId: currentICP.userId, // Use existing userId from currentICP
+      createdAt: currentICP.createdAt,
+      updatedAt: currentICP.updatedAt,
+      dateModified: currentICP.dateModified,
     }
-    systemPrompt = generateICPSystemPrompt(updatedFullICP)
-
-    if (process.env.NEXT_PUBLIC_ENABLE_OPENAI_ASSISTANTS === "true") {
-      if (assistantId) {
-        const updatedAssistantId = await updateOpenAIAssistant(assistantId, updatedFullICP.name, systemPrompt)
-        if (!updatedAssistantId) {
-          toast({
-            title: "OpenAI Error",
-            description: "Failed to update OpenAI assistant. ICP updated, but assistant may be out of sync.",
-            variant: "warning",
-          })
-        }
-      } else {
-        // If no assistant existed, try to create one
-        assistantId = await createOpenAIAssistant(updatedFullICP.name, systemPrompt)
-        if (!assistantId) {
-          toast({
-            title: "OpenAI Error",
-            description: "Failed to create OpenAI assistant during update. ICP updated without assistant.",
-            variant: "warning",
-          })
-        }
-      }
-    } else {
-      console.log("OpenAI Assistant update/creation is disabled via environment variable.")
-    }
+    systemPrompt = generateICPSystemPrompt(updatedFullICPDataForPrompt)
+    console.log("System prompt regenerated due to ICP data changes. OpenAI assistant interaction is bypassed.")
   }
 
   const updatesForSupabase = {
@@ -143,15 +129,19 @@ export async function updateICPInSupabase(
       ? (icpUpdates.customParameters as any)
       : (currentICP.customParameters as any),
     system_prompt: systemPrompt,
-    assistant_id: assistantId,
-    date_modified: new Date().toISOString(), // Manually set for Supabase if not using DB trigger for this field
+    assistant_id: icpUpdates.assistantId !== undefined ? icpUpdates.assistantId : currentICP.assistantId,
+    date_modified: new Date().toISOString(),
   }
+
+  Object.keys(updatesForSupabase).forEach(
+    (key) => (updatesForSupabase as any)[key] === undefined && delete (updatesForSupabase as any)[key],
+  )
 
   // @ts-ignore
   const { data, error } = await supabase.from("icps").update(updatesForSupabase).eq("id", icpId).select().single()
 
   if (error) {
-    console.error("Error updating ICP:", error)
+    console.error(`Error updating ICP (ID: ${icpId}) in Supabase:`, JSON.stringify(error, null, 2))
     toast({ title: "Database Error", description: "Could not update ICP. " + error.message, variant: "destructive" })
     return null
   }
@@ -161,27 +151,12 @@ export async function updateICPInSupabase(
 }
 
 export async function deleteICPFromSupabase(icpId: string): Promise<boolean> {
-  const icpToDelete = await getICPByIdFromSupabase(icpId)
-
-  if (icpToDelete && icpToDelete.assistantId && process.env.NEXT_PUBLIC_ENABLE_OPENAI_ASSISTANTS === "true") {
-    const assistantDeleted = await deleteOpenAIAssistant(icpToDelete.assistantId)
-    if (!assistantDeleted) {
-      toast({
-        title: "OpenAI Error",
-        description:
-          "Failed to delete associated OpenAI assistant. Please check OpenAI dashboard. ICP deletion will proceed.",
-        variant: "warning",
-      })
-      // Decide if you want to stop ICP deletion if assistant deletion fails. For now, we proceed.
-    }
-  } else if (icpToDelete && icpToDelete.assistantId) {
-    console.log("OpenAI Assistant deletion is disabled or no assistant ID found for ICP:", icpId)
-  }
+  console.log("OpenAI Assistant deletion is bypassed for ICP:", icpId)
 
   const { error } = await supabase.from("icps").delete().eq("id", icpId)
 
   if (error) {
-    console.error("Error deleting ICP:", error)
+    console.error(`Error deleting ICP (ID: ${icpId}) from Supabase:`, JSON.stringify(error, null, 2))
     toast({ title: "Database Error", description: "Could not delete ICP. " + error.message, variant: "destructive" })
     return false
   }
@@ -190,13 +165,19 @@ export async function deleteICPFromSupabase(icpId: string): Promise<boolean> {
   return true
 }
 
-// Helper to map Supabase row to our ICP type
-// Handles potential discrepancies between DB schema and TS type, especially for JSONB
 function mapRowToICP(row: any): ICP {
   return {
-    ...row,
+    id: row.id,
+    name: row.name,
+    description: row.description,
     customParameters:
       (typeof row.custom_parameters === "string" ? JSON.parse(row.custom_parameters) : row.custom_parameters) || [],
-    dateModified: row.date_modified || row.updated_at, // Prefer date_modified if it exists
+    dateModified: row.date_modified || row.updated_at,
+    color: row.color,
+    assistantId: row.assistant_id,
+    systemPrompt: row.system_prompt,
+    userId: row.user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   } as ICP
 }

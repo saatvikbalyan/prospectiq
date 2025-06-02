@@ -8,8 +8,9 @@ import { Separator } from "@/components/ui/separator"
 import { Plus, Trash2, Calendar, Settings2, ListChecks, CheckCircle, X, Loader2 } from "lucide-react"
 import { ICPModal } from "@/components/icp-modal"
 import type { ICP } from "@/types/icp"
-import { getICPsFromSupabase, addICPToSupabase, updateICPInSupabase, deleteICPFromSupabase } from "@/lib/icp-service" // Updated import
+import { getICPsFromSupabase, addICPToSupabase, updateICPInSupabase, deleteICPFromSupabase } from "@/lib/icp-service"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context" // Import useAuth
 
 const colorClasses = {
   blue: "from-blue-500/20 to-blue-600/20 border-blue-500/30",
@@ -29,6 +30,7 @@ export default function ICPsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const { toast } = useToast()
+  const { user } = useAuth() // Get user from auth context
 
   const fetchICPs = useCallback(async () => {
     setIsLoading(true)
@@ -36,7 +38,6 @@ export default function ICPsPage() {
       const fetchedICPs = await getICPsFromSupabase()
       setIcps(fetchedICPs)
     } catch (error) {
-      // Toast is handled in icp-service, but you could add more here
       console.error("Failed to fetch ICPs on page:", error)
     } finally {
       setIsLoading(false)
@@ -58,55 +59,59 @@ export default function ICPsPage() {
   }
 
   const handleDeleteICP = async (id: string) => {
-    setDeletingId(id) // Keep track of which one is targeted for UI
+    setDeletingId(id)
     setIsDeleting(true)
     const success = await deleteICPFromSupabase(id)
     if (success) {
       setIcps((prevIcps) => prevIcps.filter((icp) => icp.id !== id))
-      toast({ title: "ICP Deleted", description: "The ICP has been successfully deleted." })
-    } else {
-      // Toast is handled in icp-service
     }
     setDeletingId(null)
     setIsDeleting(false)
   }
 
-  const handleSaveICP = async (
-    icpToSave: Omit<ICP, "id" | "assistantId" | "systemPrompt" | "createdAt" | "updatedAt" | "dateModified"> | ICP,
-  ) => {
+  const handleSaveICP = async (icpDataFromModal: ICP) => {
     setIsSaving(true)
     let savedICP: ICP | null = null
 
-    if ("id" in icpToSave && icpToSave.id) {
-      // This means it's an update
-      const { id, name, description, customParameters, color } = icpToSave as ICP
-      // Construct the update object carefully, only including fields that can be updated
-      const updates: Partial<Omit<ICP, "id" | "createdAt" | "updatedAt">> = {
-        name,
-        description,
-        customParameters,
-        color,
+    if (!user || !user.id) {
+      // Check if user and user.id are available
+      toast({
+        title: "Authentication Error",
+        description: "User not authenticated. Please log in again.",
+        variant: "destructive",
+      })
+      setIsSaving(false)
+      return
+    }
+    const currentUserId = user.id
+
+    if (editingICP && editingICP.id) {
+      const updates: Partial<
+        Omit<ICP, "id" | "createdAt" | "updatedAt" | "userId" | "systemPrompt" | "assistantId" | "dateModified">
+      > = {
+        name: icpDataFromModal.name,
+        description: icpDataFromModal.description,
+        customParameters: icpDataFromModal.customParameters,
+        color: icpDataFromModal.color,
       }
-      savedICP = await updateICPInSupabase(icpToSave.id, updates)
+      // For updates, userId is usually part of the RLS policy and not explicitly passed in the update payload itself
+      // unless you intend to change ownership, which is not the case here.
+      savedICP = await updateICPInSupabase(editingICP.id, updates)
     } else {
-      // This means it's a new ICP
-      // Ensure we are passing the correct type to addICPToSupabase
-      const newICPData: Omit<ICP, "id" | "assistantId" | "systemPrompt" | "createdAt" | "updatedAt" | "dateModified"> =
-        {
-          name: icpToSave.name,
-          description: icpToSave.description,
-          customParameters: icpToSave.customParameters,
-          color: icpToSave.color,
-          // userId can be omitted if RLS default is auth.uid()
-        }
-      savedICP = await addICPToSupabase(newICPData)
+      const newICPData: Omit<
+        ICP,
+        "id" | "assistantId" | "systemPrompt" | "createdAt" | "updatedAt" | "dateModified" | "userId"
+      > = {
+        name: icpDataFromModal.name,
+        description: icpDataFromModal.description,
+        customParameters: icpDataFromModal.customParameters,
+        color: icpDataFromModal.color,
+      }
+      savedICP = await addICPToSupabase(newICPData, currentUserId) // Pass currentUserId
     }
 
     if (savedICP) {
-      fetchICPs() // Re-fetch all ICPs to get the latest state including any server-generated fields
-      toast({ title: "ICP Saved", description: "The ICP has been successfully saved." })
-    } else {
-      // Toast is handled in icp-service for errors
+      fetchICPs()
     }
     setIsModalOpen(false)
     setIsSaving(false)
@@ -225,6 +230,16 @@ export default function ICPsPage() {
                       <ListChecks className="h-3.5 w-3.5 mr-2 opacity-70" />
                       Parameters: {icp.customParameters.length} defined
                     </div>
+                    <div className="flex items-center text-xs text-blue-300/80">
+                      <ListChecks className="h-3.5 w-3.5 mr-2 opacity-70" />
+                      Assistant ID: {icp.assistantId || "Not set"}
+                    </div>
+                    <details className="text-xs text-blue-300/80">
+                      <summary className="cursor-pointer">View System Prompt</summary>
+                      <p className="mt-1 p-2 bg-black/20 rounded max-h-32 overflow-y-auto text-xs">
+                        {icp.systemPrompt || "No system prompt generated."}
+                      </p>
+                    </details>
                   </div>
                 </div>
                 <div className="px-5 pb-5 pt-2 pl-8">
