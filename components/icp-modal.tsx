@@ -14,21 +14,24 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircle, Trash2, ChevronRight, ChevronLeft, Save, Info, CheckCircle } from "lucide-react"
+import { PlusCircle, Trash2, ChevronRight, ChevronLeft, Save, Info, CheckCircle, Loader2 } from "lucide-react"
 import type { ICP, CustomParameter, ParameterOutputScoringType } from "@/types/icp"
 import { cn } from "@/lib/utils"
+
+const MAX_CUSTOM_PARAMETERS = 10 // Declare MAX_CUSTOM_PARAMETERS
+const OUTPUT_SCORING_TYPES = ["Score Range", "Binary"] // Declare OUTPUT_SCORING_TYPES
 
 interface ICPModalProps {
   isOpen: boolean
   onClose: () => void
   icp?: ICP | null
-  onSave: (icp: ICP) => void
+  onSave: (
+    icp: Omit<ICP, "id" | "assistantId" | "systemPrompt" | "createdAt" | "updatedAt" | "dateModified"> | ICP,
+  ) => void // Adjusted type
+  isSaving?: boolean // Add this line
 }
 
-const MAX_CUSTOM_PARAMETERS = 4
-const OUTPUT_SCORING_TYPES: ParameterOutputScoringType[] = ["String", "Number", "Score Range"]
-
-export function ICPModal({ isOpen, onClose, icp, onSave }: ICPModalProps) {
+export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICPModalProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const [icpName, setIcpName] = useState("")
   const [icpDescription, setIcpDescription] = useState("")
@@ -480,10 +483,19 @@ export function ICPModal({ isOpen, onClose, icp, onSave }: ICPModalProps) {
               <Button
                 onClick={handleSubmit}
                 className="primary-button h-11 px-6 text-base"
-                disabled={!isStep1Valid() || !isStep2Valid()}
+                disabled={!isStep1Valid() || !isStep2Valid() || isSaving} // Add isSaving here
               >
-                <Save className="h-5 w-5 mr-2" />
-                {icp ? "Update ICP" : "Create ICP"}
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-5 w-5 mr-2" />
+                    {icp ? "Update ICP" : "Create ICP"}
+                  </>
+                )}
               </Button>
             ) : (
               <Button onClick={nextStep} className="primary-button h-11 px-6 text-base" disabled={!isStep1Valid()}>
