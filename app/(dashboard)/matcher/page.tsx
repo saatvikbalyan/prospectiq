@@ -11,23 +11,33 @@ import { Label } from "@/components/ui/label"
 import { Upload, Download, FileText, CheckCircle, AlertCircle, Zap, Settings2 } from "lucide-react"
 import { useDropzone } from "react-dropzone"
 import { useToast } from "@/hooks/use-toast"
-import { getICPs } from "@/lib/icp-store"
+import { getICPsFromSupabase } from "@/lib/icp-service"
+import { useTaskStore } from "@/lib/task-store"
+import { TaskModal } from "@/components/task-modal"
+import { useRouter } from "next/navigation"
 import type { ICP } from "@/types/icp"
 
 export default function MatcherPage() {
-  const [uploadedFile, setUploadedFile] = useState(null)
+  const [uploadedFile, setUploadedFile] = useState<any>(null)
   const [selectedICP, setSelectedICP] = useState("")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [icps, setIcps] = useState<ICP[]>([])
+  const [showTaskModal, setShowTaskModal] = useState(false)
   const { toast } = useToast()
+  const { addTask, simulateTaskProgress } = useTaskStore()
+  const router = useRouter()
 
-  // Load ICPs from store on component mount
+  // Load ICPs from service on component mount
   useEffect(() => {
-    setIcps(getICPs())
+    const loadICPs = async () => {
+      const fetchedICPs = await getICPsFromSupabase()
+      setIcps(fetchedICPs)
+    }
+    loadICPs()
   }, [])
 
   const onDrop = useCallback(
-    (acceptedFiles) => {
+    (acceptedFiles: File[]) => {
       const file = acceptedFiles[0]
       if (file) {
         // Validate file
@@ -66,7 +76,7 @@ export default function MatcherPage() {
     multiple: false,
   })
 
-  const handleAnalysis = () => {
+  const handleAnalysisClick = () => {
     if (!uploadedFile || !selectedICP) {
       toast({
         title: "Missing requirements",
@@ -75,17 +85,43 @@ export default function MatcherPage() {
       })
       return
     }
+    setShowTaskModal(true)
+  }
 
+  const handleTaskSubmit = (taskName: string) => {
     setIsAnalyzing(true)
 
-    // Simulate analysis
+    const selectedICPData = icps.find((icp) => icp.id === selectedICP)
+
+    // Create the task
+    const taskId = addTask({
+      name: taskName,
+      icp: selectedICPData?.name || "Unknown ICP",
+      fileName: uploadedFile.name,
+      status: "running",
+      progress: 0,
+      startTime: "Just now",
+      estimatedCompletion: "Calculating...",
+    })
+
+    // Start simulating progress
+    simulateTaskProgress(taskId)
+
+    // Close modal and show success
     setTimeout(() => {
       setIsAnalyzing(false)
+      setShowTaskModal(false)
+
       toast({
         title: "Analysis started",
-        description: "Your task has been queued and will appear in the dashboard",
+        description: `Task "${taskName}" has been queued and will appear in the dashboard`,
       })
-    }, 2000)
+
+      // Navigate to dashboard after a short delay
+      setTimeout(() => {
+        router.push("/dashboard")
+      }, 1500)
+    }, 1000)
   }
 
   const downloadTemplate = () => {
@@ -117,22 +153,9 @@ export default function MatcherPage() {
             <Download className="h-4 w-4 mr-2" />
             Download Template
           </Button>
-          <Button
-            onClick={handleAnalysis}
-            disabled={!uploadedFile || !selectedICP || isAnalyzing}
-            className="primary-button"
-          >
-            {isAnalyzing ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <Zap className="h-4 w-4 mr-2" />
-                Run Analysis
-              </>
-            )}
+          <Button onClick={handleAnalysisClick} disabled={!uploadedFile || !selectedICP} className="primary-button">
+            <Zap className="h-4 w-4 mr-2" />
+            Run Analysis
           </Button>
         </div>
       </header>
@@ -288,6 +311,16 @@ export default function MatcherPage() {
           </Card>
         )}
       </div>
+
+      {/* Task Naming Modal */}
+      <TaskModal
+        open={showTaskModal}
+        onOpenChange={setShowTaskModal}
+        onSubmit={handleTaskSubmit}
+        isLoading={isAnalyzing}
+        selectedICP={selectedICPData?.name}
+        fileName={uploadedFile?.name}
+      />
     </SidebarInset>
   )
 }

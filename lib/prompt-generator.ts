@@ -8,6 +8,8 @@ function formatParameterForPrompt(param: CustomParameter): string {
     details += ` (Expect a numerical value)`
   } else if (param.scoringType === "String") {
     details += ` (Expect a descriptive string)`
+  } else if (param.scoringType === "Binary") {
+    details += ` (Expect Yes/No or True/False)`
   }
   return details
 }
@@ -40,6 +42,16 @@ Example for a custom parameter named "Cloud Adoption Level" with type "Score Ran
 Example for a custom parameter named "Primary Industry" with type "String":
 "custom_parameter_outputs": {
 "Primary Industry": "Healthcare Technology" // Or your assessed string
+}
+
+Example for a custom parameter named "Uses CRM" with type "Binary":
+"custom_parameter_outputs": {
+"Uses CRM": true // Or false
+}
+
+Example for a custom parameter named "Employee Count" with type "Number":
+"custom_parameter_outputs": {
+"Employee Count": 250 // Or your assessed number
 }
 
 Focus your analysis solely on the provided ICP criteria. Be objective and thorough.

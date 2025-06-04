@@ -1,10 +1,7 @@
 "use client"
 
 import type React from "react"
-
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
-import { useEffect } from "react"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -12,13 +9,6 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth()
-  const router = useRouter()
-
-  useEffect(() => {
-    if (!isLoading && !user) {
-      router.push("/login")
-    }
-  }, [user, isLoading, router])
 
   if (isLoading) {
     return (
@@ -31,9 +21,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     )
   }
 
-  if (!user) {
-    return null
-  }
-
+  // Always render children since we always have a test user
   return <>{children}</>
 }

@@ -10,7 +10,7 @@ import { ICPModal } from "@/components/icp-modal"
 import type { ICP } from "@/types/icp"
 import { getICPsFromSupabase, addICPToSupabase, updateICPInSupabase, deleteICPFromSupabase } from "@/lib/icp-service"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/contexts/auth-context" // Import useAuth
+import { useAuth } from "@/contexts/auth-context"
 
 const colorClasses = {
   blue: "from-blue-500/20 to-blue-600/20 border-blue-500/30",
@@ -30,7 +30,7 @@ export default function ICPsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const { toast } = useToast()
-  const { user } = useAuth() // Get user from auth context
+  const { user } = useAuth()
 
   const fetchICPs = useCallback(async () => {
     setIsLoading(true)
@@ -73,17 +73,8 @@ export default function ICPsPage() {
     setIsSaving(true)
     let savedICP: ICP | null = null
 
-    if (!user || !user.id) {
-      // Check if user and user.id are available
-      toast({
-        title: "Authentication Error",
-        description: "User not authenticated. Please log in again.",
-        variant: "destructive",
-      })
-      setIsSaving(false)
-      return
-    }
-    const currentUserId = user.id
+    // Use the test user ID from auth context
+    const currentUserId = user?.id
 
     if (editingICP && editingICP.id) {
       const updates: Partial<
@@ -94,8 +85,6 @@ export default function ICPsPage() {
         customParameters: icpDataFromModal.customParameters,
         color: icpDataFromModal.color,
       }
-      // For updates, userId is usually part of the RLS policy and not explicitly passed in the update payload itself
-      // unless you intend to change ownership, which is not the case here.
       savedICP = await updateICPInSupabase(editingICP.id, updates)
     } else {
       const newICPData: Omit<
@@ -107,7 +96,7 @@ export default function ICPsPage() {
         customParameters: icpDataFromModal.customParameters,
         color: icpDataFromModal.color,
       }
-      savedICP = await addICPToSupabase(newICPData, currentUserId) // Pass currentUserId
+      savedICP = await addICPToSupabase(newICPData, currentUserId)
     }
 
     if (savedICP) {
@@ -230,16 +219,6 @@ export default function ICPsPage() {
                       <ListChecks className="h-3.5 w-3.5 mr-2 opacity-70" />
                       Parameters: {icp.customParameters.length} defined
                     </div>
-                    <div className="flex items-center text-xs text-blue-300/80">
-                      <ListChecks className="h-3.5 w-3.5 mr-2 opacity-70" />
-                      Assistant ID: {icp.assistantId || "Not set"}
-                    </div>
-                    <details className="text-xs text-blue-300/80">
-                      <summary className="cursor-pointer">View System Prompt</summary>
-                      <p className="mt-1 p-2 bg-black/20 rounded max-h-32 overflow-y-auto text-xs">
-                        {icp.systemPrompt || "No system prompt generated."}
-                      </p>
-                    </details>
                   </div>
                 </div>
                 <div className="px-5 pb-5 pt-2 pl-8">

@@ -18,8 +18,8 @@ import { PlusCircle, Trash2, ChevronRight, ChevronLeft, Save, Info, CheckCircle,
 import type { ICP, CustomParameter, ParameterOutputScoringType } from "@/types/icp"
 import { cn } from "@/lib/utils"
 
-const MAX_CUSTOM_PARAMETERS = 10 // Declare MAX_CUSTOM_PARAMETERS
-const OUTPUT_SCORING_TYPES = ["Score Range", "Binary"] // Declare OUTPUT_SCORING_TYPES
+const MAX_CUSTOM_PARAMETERS = 10
+const OUTPUT_SCORING_TYPES = ["Score Range", "Binary", "Number", "String"]
 
 interface ICPModalProps {
   isOpen: boolean
@@ -27,8 +27,8 @@ interface ICPModalProps {
   icp?: ICP | null
   onSave: (
     icp: Omit<ICP, "id" | "assistantId" | "systemPrompt" | "createdAt" | "updatedAt" | "dateModified"> | ICP,
-  ) => void // Adjusted type
-  isSaving?: boolean // Add this line
+  ) => void
+  isSaving?: boolean
 }
 
 export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICPModalProps) {
@@ -40,11 +40,11 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
   useEffect(() => {
     if (isOpen) {
       if (icp) {
-        setIcpName(icp.name)
-        setIcpDescription(icp.description)
+        setIcpName(icp.name || "")
+        setIcpDescription(icp.description || "")
         setCustomParameters(
-          icp.customParameters.map((p) => {
-            const type = p.scoringType || "Score Range" // Default to Score Range if type is missing
+          (icp.customParameters || []).map((p) => {
+            const type = p.scoringType || "Score Range"
             return {
               ...p,
               scoringType: type,
@@ -127,9 +127,9 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
 
   const isStep1Valid = () => {
     return (
-      icpName.trim() !== "" &&
-      icpDescription.trim() !== "" &&
-      customParameters.every((p) => p.parameterName.trim() !== "")
+      (icpName || "").trim() !== "" &&
+      (icpDescription || "").trim() !== "" &&
+      customParameters.every((p) => (p.parameterName || "").trim() !== "")
     )
   }
 
@@ -139,8 +139,8 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
         return (
           p.scoringMin !== undefined &&
           p.scoringMax !== undefined &&
-          String(p.scoringMin).trim() !== "" && // Ensure not just empty string
-          String(p.scoringMax).trim() !== "" && // Ensure not just empty string
+          String(p.scoringMin || "").trim() !== "" &&
+          String(p.scoringMax || "").trim() !== "" &&
           Number(p.scoringMin) <= Number(p.scoringMax)
         )
       }
@@ -166,6 +166,21 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
     }
     onSave(finalICP)
     onClose()
+  }
+
+  const getOutputTypeDescription = (type: ParameterOutputScoringType) => {
+    switch (type) {
+      case "Score Range":
+        return "Numerical score within a defined range"
+      case "Binary":
+        return "Yes/No or True/False output"
+      case "Number":
+        return "Any numerical value"
+      case "String":
+        return "Text-based descriptive output"
+      default:
+        return ""
+    }
   }
 
   return (
@@ -289,7 +304,7 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
                   {customParameters.map((param, index) => (
                     <div
                       key={param.id}
-                      className="p-6 rounded-lg border border-white/10 bg-white/5 space-y-5 relative shadow-md" // Increased space-y
+                      className="p-6 rounded-lg border border-white/10 bg-white/5 space-y-5 relative shadow-md"
                     >
                       <Button
                         variant="ghost"
@@ -306,7 +321,7 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
                         </Label>
                         <Input
                           id={`paramName-${param.id}`}
-                          value={param.parameterName}
+                          value={param.parameterName || ""}
                           onChange={(e) => handleParameterChange(param.id, "parameterName", e.target.value)}
                           placeholder={`e.g., Annual Revenue, Team Size`}
                           className="bg-white/10 border-white/20 text-white placeholder:text-white/40 text-base p-3"
@@ -318,7 +333,7 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
                         </Label>
                         <Textarea
                           id={`paramDesc-${param.id}`}
-                          value={param.parameterDescription}
+                          value={param.parameterDescription || ""}
                           onChange={(e) => handleParameterChange(param.id, "parameterDescription", e.target.value)}
                           placeholder="Describe what this parameter measures and why it's important..."
                           className="bg-white/10 border-white/20 text-white placeholder:text-white/40 min-h-[80px] text-base p-3"
@@ -335,20 +350,20 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
           {currentStep === 2 && (
             <div className="space-y-8">
               <Card className="card-gradient border-white/10 shadow-lg">
-                <CardHeader>
+                <CardHeader className="pb-6">
                   <CardTitle className="text-2xl text-white">Default Outputs</CardTitle>
                   <CardDescription className="text-blue-200">
                     These outputs are standard for all ICP analyses.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4 pt-6">
-                  <div className="p-4 rounded-lg border border-white/10 bg-white/5">
-                    <h4 className="font-medium text-white text-base">Overall Score</h4>
-                    <p className="text-sm text-blue-200">Range: 1 - 100 (Fixed)</p>
+                <CardContent className="space-y-6 pt-8">
+                  <div className="p-6 rounded-lg border border-white/10 bg-white/5">
+                    <h4 className="font-semibold text-white text-lg">Overall Score</h4>
+                    <p className="text-base text-blue-200">Range: 1 - 100 (Fixed)</p>
                   </div>
-                  <div className="p-4 rounded-lg border border-white/10 bg-white/5">
-                    <h4 className="font-medium text-white text-base">Scoring Reason</h4>
-                    <p className="text-sm text-blue-200">
+                  <div className="p-6 rounded-lg border border-white/10 bg-white/5">
+                    <h4 className="font-semibold text-white text-lg">Scoring Reason</h4>
+                    <p className="text-base text-blue-200">
                       A qualitative explanation for the overall score (Generated during analysis).
                     </p>
                   </div>
@@ -363,8 +378,6 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8 pt-6">
-                  {" "}
-                  {/* Increased space-y between parameters */}
                   {customParameters.length === 0 && (
                     <div className="text-center py-8 border-2 border-dashed border-white/10 rounded-lg">
                       <Info className="h-10 w-10 text-blue-400 mx-auto mb-3" />
@@ -375,7 +388,7 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
                   {customParameters.map((param) => (
                     <div
                       key={param.id}
-                      className="p-6 rounded-lg border border-white/10 bg-white/5 space-y-6 shadow-md" // Increased internal space-y
+                      className="p-6 rounded-lg border border-white/10 bg-white/5 space-y-6 shadow-md"
                     >
                       <div>
                         <h4 className="font-semibold text-white text-xl mb-1">
@@ -403,11 +416,15 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
                             <SelectContent className="bg-gray-800 border-white/20 text-white">
                               {OUTPUT_SCORING_TYPES.map((type) => (
                                 <SelectItem key={type} value={type} className="text-base hover:bg-white/10">
-                                  {type}
+                                  <div className="flex flex-col items-start">
+                                    <span className="font-medium">{type}</span>
+                                    <span className="text-xs text-blue-300">{getOutputTypeDescription(type)}</span>
+                                  </div>
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
+                          <p className="text-xs text-blue-300">{getOutputTypeDescription(param.scoringType)}</p>
                         </div>
 
                         {param.scoringType === "Score Range" && (
@@ -444,7 +461,8 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
                       {param.scoringType === "Score Range" &&
                         param.scoringMin !== undefined &&
                         param.scoringMax !== undefined &&
-                        (String(param.scoringMin).trim() === "" || String(param.scoringMax).trim() === "") && (
+                        (String(param.scoringMin || "").trim() === "" ||
+                          String(param.scoringMax || "").trim() === "") && (
                           <p className="text-sm text-yellow-400 pt-1">
                             Min and Max scores are required for Score Range.
                           </p>
@@ -452,8 +470,8 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
                       {param.scoringType === "Score Range" &&
                         param.scoringMin !== undefined &&
                         param.scoringMax !== undefined &&
-                        String(param.scoringMin).trim() !== "" &&
-                        String(param.scoringMax).trim() !== "" &&
+                        String(param.scoringMin || "").trim() !== "" &&
+                        String(param.scoringMax || "").trim() !== "" &&
                         Number(param.scoringMin) > Number(param.scoringMax) && (
                           <p className="text-sm text-red-400 pt-1">Min score cannot be greater than max score.</p>
                         )}
@@ -483,7 +501,7 @@ export function ICPModal({ isOpen, onClose, icp, onSave, isSaving = false }: ICP
               <Button
                 onClick={handleSubmit}
                 className="primary-button h-11 px-6 text-base"
-                disabled={!isStep1Valid() || !isStep2Valid() || isSaving} // Add isSaving here
+                disabled={!isStep1Valid() || !isStep2Valid() || isSaving}
               >
                 {isSaving ? (
                   <>

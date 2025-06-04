@@ -4,6 +4,7 @@ import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 
 interface User {
+  id: string
   email: string
   name: string
   role: string
@@ -18,47 +19,41 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Test user - always logged in
+const TEST_USER: User = {
+  id: "test-user-123",
+  email: "test@prospectiq.com",
+  name: "Test User",
+  role: "Admin",
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Check if user is already logged in (from localStorage)
-    const savedUser = localStorage.getItem("prospectiq-user")
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser))
-      } catch (error) {
-        localStorage.removeItem("prospectiq-user")
-      }
-    }
-    setIsLoading(false)
+    // Automatically log in the test user
+    setTimeout(() => {
+      setUser(TEST_USER)
+      setIsLoading(false)
+    }, 100) // Small delay to simulate loading
   }, [])
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true)
 
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    // Simulate a brief loading period
+    await new Promise((resolve) => setTimeout(resolve, 500))
 
-    // Import here to avoid SSR issues
-    const { validateCredentials } = await import("@/lib/auth-store")
-    const validatedUser = validateCredentials(email, password)
-
-    if (validatedUser) {
-      setUser(validatedUser)
-      localStorage.setItem("prospectiq-user", JSON.stringify(validatedUser))
-      setIsLoading(false)
-      return true
-    }
-
+    // Always succeed and log in the test user
+    setUser(TEST_USER)
     setIsLoading(false)
-    return false
+    return true
   }
 
   const logout = () => {
-    setUser(null)
-    localStorage.removeItem("prospectiq-user")
+    // Immediately log back in the test user (no actual logout)
+    setUser(TEST_USER)
   }
 
   return <AuthContext.Provider value={{ user, login, logout, isLoading }}>{children}</AuthContext.Provider>
